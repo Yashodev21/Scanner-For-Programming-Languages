@@ -1,0 +1,1369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<link rel="icon" type="image/jpeg" href="logo.jpg">
+<title>CodeScan · Multi-Language Scanner </title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Orbitron:wght@400;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<style>
+/* ── Reset & Base ───────────────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#060a0f;
+  --surface:#0d1117;
+  --surface2:#111822;
+  --surface3:#161f2c;
+  --border:#0b0b0b;
+  --border2:#243550;
+  --text:#c9d8ee;
+  --text-dim:#5a7a9a;
+  --text-bright:#e8f4ff;
+  --grid:#0a1520;
+
+  --c-color:#ff6b35;
+  --c-glow:rgba(255,107,53,0.4);
+  --java-color:#f59e0b;
+  --java-glow:rgba(245,158,11,0.4);
+  --py-color:#3fb950;
+  --py-glow:rgba(63,185,80,0.4);
+  --js-color:#58a6ff;
+  --js-glow:rgba(88,166,255,0.4);
+
+  --kw:#ff79c6;
+  --id:#8be9fd;
+  --num:#bd93f9;
+  --float:#ffb86c;
+  --str:#f1fa8c;
+  --op:#ff5555;
+  --sym:#50fa7b;
+
+  --scan-color:#58a6ff;
+  --err-color:#ff4757;
+  --ok-color:#dc2222e7;
+  --radius:8px;
+  --font-mono:'JetBrains Mono',monospace;
+  --font-display:'Orbitron',sans-serif;
+}
+
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--font-mono);
+  min-height:100vh;
+  overflow-x:hidden;
+  position:relative;
+}
+
+/* ── Grid Background ─────────────────────────────────────────────────────── */
+body::before{
+  content:'';
+  position:fixed;inset:0;
+  background-image:
+    linear-gradient(rgba(88,166,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(88,166,255,0.03) 1px, transparent 1px);
+  background-size:40px 40px;
+  pointer-events:none;z-index:0;
+}
+body::after{
+  content:'';
+  position:fixed;inset:0;
+  background:radial-gradient(ellipse 80% 50% at 50% -10%, rgba(88,166,255,0.06), transparent);
+  pointer-events:none;z-index:0;
+}
+
+/* ── Scanline overlay ────────────────────────────────────────────────────── */
+.scanlines{
+  position:fixed;inset:0;pointer-events:none;z-index:1;
+  background:repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.03) 2px,
+    rgba(0,0,0,0.03) 4px
+  );
+}
+
+/* ── Layout ──────────────────────────────────────────────────────────────── */
+.wrapper{
+  position:relative;z-index:2;
+  max-width:1280px;margin:0 auto;
+  padding:0 24px 60px;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+header{
+  padding:40px 0 32px;
+  display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid var(--border);
+  margin-bottom:36px;
+}
+.logo{
+  display:flex;align-items:center;gap:14px;
+}
+.logo-icon{
+  width:44px;height:44px;
+  border:1px solid var(--js-color);
+  border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:20px;
+  box-shadow:0 0 16px rgba(88,166,255,0.3);
+  position:relative;overflow:hidden;
+}
+.logo-icon::before{
+  content:'';
+  position:absolute;inset:0;
+  background:linear-gradient(135deg, rgba(88,166,255,0.15), transparent);
+}
+.logo-text{
+  font-family:var(--font-display);
+  font-size:22px;font-weight:900;letter-spacing:3px;
+  color:var(--text-bright);
+}
+.logo-sub{
+  font-size:10px;letter-spacing:4px;color:var(--text-dim);
+  margin-top:2px;text-transform:uppercase;
+}
+.header-badge{
+  display:flex;align-items:center;gap:8px;
+  font-size:11px;letter-spacing:2px;color:var(--text-dim);
+  padding:6px 14px;
+  border:1px solid var(--border);
+  border-radius:20px;
+  background:var(--surface);
+}
+.badge-dot{
+  width:7px;height:7px;border-radius:50%;
+  background:var(--ok-color);
+  box-shadow:0 0 6px var(--ok-color);
+  animation:pulse 0.25s infinite;
+}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+
+/* ── Main Grid ───────────────────────────────────────────────────────────── */
+.main-grid{
+  display:flex;
+  flex-direction:column;
+  gap:20px;
+}
+
+/* ── Panel ────────────────────────────────────────────────────────────────── */
+.panel{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:12px;
+  overflow:hidden;
+  position:relative;
+}
+.panel::before{
+  content:'';
+  position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg, transparent, var(--border2), transparent);
+}
+.panel-header{
+  padding:14px 20px;
+  background:var(--surface2);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:10px;
+}
+.panel-dots{display:flex;gap:6px}
+.dot{width:10px;height:10px;border-radius:50%}
+.dot-r{background:#ff5f57}.dot-y{background:#ffbd2e}.dot-g{background:#28ca42}
+.panel-title{
+  font-size:11px;letter-spacing:3px;color:var(--text-dim);
+  text-transform:uppercase;margin-left:4px;
+}
+.panel-body{padding:20px}
+
+/* ── Language Buttons ────────────────────────────────────────────────────── */
+.lang-section{margin-bottom:20px}
+.lang-label{
+  font-size:10px;letter-spacing:3px;color:var(--text-dim);
+  text-transform:uppercase;margin-bottom:12px;
+}
+.lang-buttons{display:flex;gap:10px;flex-wrap:wrap}
+
+.lang-btn{
+  position:relative;
+  padding:10px 22px;
+  font-family:var(--font-display);
+  font-size:12px;font-weight:700;letter-spacing:3px;
+  border:1px solid;
+  border-radius:6px;
+  cursor:pointer;
+  background:transparent;
+  transition:all 0.2s;
+  overflow:hidden;
+}
+.lang-btn::before{
+  content:'';
+  position:absolute;inset:0;
+  background:currentColor;
+  opacity:0;
+  transition:opacity 0.2s;
+}
+.lang-btn:hover::before{opacity:0.08}
+.lang-btn.active::before{opacity:0.15}
+.lang-btn:hover{transform:translateY(-2px) scale(1.04)}
+.lang-btn:active{transform:translateY(0) scale(0.98)}
+
+.lang-btn.c-btn{color:var(--c-color);border-color:var(--c-color)}
+.lang-btn.c-btn:hover,.lang-btn.c-btn.active{
+  box-shadow:0 0 20px var(--c-glow),0 0 40px rgba(255,107,53,0.15);
+  text-shadow:0 0 10px var(--c-color);
+}
+.lang-btn.java-btn{color:var(--java-color);border-color:var(--java-color)}
+.lang-btn.java-btn:hover,.lang-btn.java-btn.active{
+  box-shadow:0 0 20px var(--java-glow),0 0 40px rgba(245,158,11,0.15);
+  text-shadow:0 0 10px var(--java-color);
+}
+.lang-btn.py-btn{color:var(--py-color);border-color:var(--py-color)}
+.lang-btn.py-btn:hover,.lang-btn.py-btn.active{
+  box-shadow:0 0 20px var(--py-glow),0 0 40px rgba(63,185,80,0.15);
+  text-shadow:0 0 10px var(--py-color);
+}
+.lang-btn.js-btn{color:var(--js-color);border-color:var(--js-color)}
+.lang-btn.js-btn:hover,.lang-btn.js-btn.active{
+  box-shadow:0 0 20px var(--js-glow),0 0 40px rgba(88,166,255,0.15);
+  text-shadow:0 0 10px var(--js-color);
+}
+
+/* ── Code Editor ─────────────────────────────────────────────────────────── */
+.editor-wrap{
+  position:relative;
+  border:1px solid var(--border2);
+  border-radius:8px;
+  overflow:hidden;
+  background:var(--bg);
+}
+.editor-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 14px;
+  background:var(--surface2);
+  border-bottom:1px solid var(--border);
+}
+.editor-lang-tag{
+  font-size:10px;letter-spacing:2px;color:var(--text-dim);
+  text-transform:uppercase;
+}
+.editor-lines{
+  position:absolute;left:0;top:0;bottom:0;width:44px;
+  padding:12px 0;
+  background:var(--surface2);
+  border-right:1px solid var(--border);
+  display:flex;flex-direction:column;
+  align-items:flex-end;
+  padding-right:8px;
+  pointer-events:none;
+  overflow:hidden;
+}
+.line-num{
+  font-size:11px;color:var(--text-dim);
+  line-height:21px;font-family:var(--font-mono);
+  min-width:20px;text-align:right;
+}
+#codeInput{
+  display:block;width:100%;
+  padding:12px 12px 12px 56px;
+  background:transparent;
+  color:var(--text-bright);
+  font-family:var(--font-mono);
+  font-size:13px;line-height:21px;
+  border:none;outline:none;resize:vertical;
+  min-height:280px;
+  caret-color:var(--js-color);
+  tab-size:2;
+}
+#codeInput::selection{background:rgba(88,166,255,0.25)}
+#codeInput::placeholder{color:var(--text-dim)}
+
+/* ── Scan Button ─────────────────────────────────────────────────────────── */
+.scan-row{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-top:16px;
+  gap:12px;
+}
+.char-count{font-size:11px;color:var(--text-dim);letter-spacing:1px}
+
+#scanBtn{
+  position:relative;
+  padding:12px 32px;
+  font-family:var(--font-display);
+  font-size:12px;font-weight:700;letter-spacing:3px;
+  color:#000;
+  background:var(--scan-color);
+  border:none;border-radius:6px;
+  cursor:pointer;
+  transition:all 0.2s;
+  overflow:hidden;
+  text-transform:uppercase;
+}
+#scanBtn::before{
+  content:'';
+  position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,0.25),transparent);
+  transform:translateX(-100%);
+  transition:transform 0.5s;
+}
+#scanBtn:hover::before{transform:translateX(100%)}
+#scanBtn:hover{
+  box-shadow:0 0 24px rgba(88,166,255,0.6),0 4px 16px rgba(0,0,0,0.4);
+  transform:translateY(-2px);
+}
+#scanBtn:active{transform:translateY(0)}
+#scanBtn:disabled{opacity:0.5;cursor:not-allowed;transform:none}
+#scanBtn .btn-spinner{
+  display:none;
+  width:14px;height:14px;
+  border:2px solid rgba(0,0,0,0.3);
+  border-top-color:#000;
+  border-radius:50%;
+  animation:spin 0.7s linear infinite;
+  margin-right:8px;vertical-align:middle;
+}
+#scanBtn.loading .btn-spinner{display:inline-block}
+#scanBtn.loading .btn-text{display:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Error / Success Banner ──────────────────────────────────────────────── */
+#outputBanner{
+  margin-top:16px;
+  border-radius:8px;
+  overflow:hidden;
+  display:none;
+}
+.banner-inner{
+  padding:12px 16px;
+  display:flex;align-items:flex-start;gap:10px;
+}
+.banner-icon{font-size:16px;flex-shrink:0;margin-top:1px}
+.banner-messages{flex:1}
+.banner-msg{
+  font-size:12px;line-height:1.6;
+  font-family:var(--font-mono);
+}
+.banner-msg+.banner-msg{margin-top:4px}
+#outputBanner.error{
+  border:1px solid rgba(255,71,87,0.4);
+  background:rgba(255,71,87,0.07);
+}
+#outputBanner.error .banner-msg{color:#ff6b81}
+#outputBanner.success{
+  border:1px solid rgba(63,185,80,0.4);
+  background:rgba(63,185,80,0.07);
+}
+#outputBanner.success .banner-msg{color:var(--ok-color)}
+
+/* ── Stats Bar ───────────────────────────────────────────────────────────── */
+#statsBar{
+  display:none;
+  margin-top:16px;
+  padding:12px 16px;
+  background:var(--surface2);
+  border:1px solid var(--border);
+  border-radius:8px;
+  display:none;
+}
+.stats-grid{
+  display:flex;flex-wrap:wrap;gap:20px;
+}
+.stat-item{
+  display:flex;flex-direction:column;gap:2px;
+}
+.stat-label{font-size:9px;letter-spacing:2px;color:var(--text-dim);text-transform:uppercase}
+.stat-value{font-size:16px;font-weight:700;font-family:var(--font-display)}
+
+/* ── Token Table Panel ───────────────────────────────────────────────────── */
+#tokensSection{display:none}
+
+.table-controls{
+  display:flex;align-items:center;gap:12px;
+  margin-bottom:16px;flex-wrap:wrap;
+}
+.filter-label{font-size:10px;letter-spacing:2px;color:var(--text-dim);text-transform:uppercase}
+.filter-pills{display:flex;gap:8px;flex-wrap:wrap}
+.filter-pill{
+  padding:4px 12px;
+  font-size:10px;letter-spacing:1px;
+  border:1px solid var(--border2);
+  border-radius:20px;
+  cursor:pointer;
+  background:transparent;
+  color:var(--text-dim);
+  font-family:var(--font-mono);
+  transition:all 0.15s;
+}
+.filter-pill:hover{border-color:var(--scan-color);color:var(--scan-color)}
+.filter-pill.active{
+  background:rgba(88,166,255,0.15);
+  border-color:var(--scan-color);
+  color:var(--scan-color);
+}
+.filter-pill[data-type="KEYWORD"].active{background:rgba(255,121,198,0.15);border-color:var(--kw);color:var(--kw)}
+.filter-pill[data-type="IDENTIFIER"].active{background:rgba(139,233,253,0.15);border-color:var(--id);color:var(--id)}
+.filter-pill[data-type="NUMBER"].active{background:rgba(189,147,249,0.15);border-color:var(--num);color:var(--num)}
+.filter-pill[data-type="FLOAT"].active{background:rgba(255,184,108,0.15);border-color:var(--float);color:var(--float)}
+.filter-pill[data-type="STRING"].active{background:rgba(241,250,140,0.15);border-color:var(--str);color:var(--str)}
+.filter-pill[data-type="OPERATOR"].active{background:rgba(255,85,85,0.15);border-color:var(--op);color:var(--op)}
+.filter-pill[data-type="SYMBOL"].active{background:rgba(80,250,123,0.15);border-color:var(--sym);color:var(--sym)}
+
+.table-wrap{
+  overflow-x:auto;
+  border:1px solid var(--border);
+  border-radius:8px;
+}
+table{
+  width:100%;border-collapse:collapse;
+  font-size:12px;
+}
+thead{
+  background:var(--surface2);
+  border-bottom:1px solid var(--border2);
+  position:sticky;top:0;z-index:10;
+}
+th{
+  padding:12px 20px;
+  text-align:left;
+  font-size:9px;letter-spacing:3px;
+  color:var(--text-dim);text-transform:uppercase;
+  white-space:nowrap;
+  font-family:var(--font-mono);
+  font-weight:400;
+}
+th:first-child{width:40px;text-align:center}
+th:nth-child(2){width:120px}
+th:nth-child(3){width:180px}
+th:nth-child(4){width:auto}
+
+tbody tr{
+  border-bottom:1px solid rgba(30,45,64,0.5);
+  transition:background 0.1s;
+  animation:rowIn 0.3s ease forwards;
+  opacity:0;
+}
+tbody tr:hover{background:rgba(88,166,255,0.04)}
+@keyframes rowIn{
+  from{opacity:0;transform:translateX(-8px)}
+  to{opacity:1;transform:translateX(0)}
+}
+td{padding:10px 20px;vertical-align:middle;font-family:var(--font-mono)}
+td:first-child{text-align:center;color:var(--text-dim);font-size:10px}
+
+.lang-badge{
+  display:inline-flex;align-items:center;
+  padding:3px 10px;
+  border-radius:4px;
+  font-size:10px;letter-spacing:2px;font-weight:700;
+  font-family:var(--font-display);
+  border:1px solid;
+}
+.lang-badge.C{color:var(--c-color);border-color:rgba(255,107,53,0.4);background:rgba(255,107,53,0.1)}
+.lang-badge.JAVA{color:var(--java-color);border-color:rgba(245,158,11,0.4);background:rgba(245,158,11,0.1)}
+.lang-badge.PYTHON{color:var(--py-color);border-color:rgba(63,185,80,0.4);background:rgba(63,185,80,0.1)}
+.lang-badge.JS{color:var(--js-color);border-color:rgba(88,166,255,0.4);background:rgba(88,166,255,0.1)}
+
+.type-badge{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:3px 10px;
+  border-radius:4px;
+  font-size:10px;letter-spacing:1px;
+  border:1px solid;
+}
+.type-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.type-badge.KEYWORD{color:var(--kw);border-color:rgba(255,121,198,0.3);background:rgba(255,121,198,0.08)}
+.type-badge.IDENTIFIER{color:var(--id);border-color:rgba(139,233,253,0.3);background:rgba(139,233,253,0.08)}
+.type-badge.NUMBER{color:var(--num);border-color:rgba(189,147,249,0.3);background:rgba(189,147,249,0.08)}
+.type-badge.FLOAT{color:var(--float);border-color:rgba(255,184,108,0.3);background:rgba(255,184,108,0.08)}
+.type-badge.STRING{color:var(--str);border-color:rgba(241,250,140,0.3);background:rgba(241,250,140,0.08)}
+.type-badge.OPERATOR{color:var(--op);border-color:rgba(255,85,85,0.3);background:rgba(255,85,85,0.08)}
+.type-badge.SYMBOL{color:var(--sym);border-color:rgba(80,250,123,0.3);background:rgba(80,250,123,0.08)}
+
+.token-value{
+  font-size:13px;
+  font-family:var(--font-mono);
+  color:var(--text-bright);
+}
+
+/* ── Empty state ─────────────────────────────────────────────────────────── */
+.empty-state{
+  text-align:center;
+  padding:60px 20px;
+  color:var(--text-dim);
+}
+.empty-icon{font-size:40px;margin-bottom:16px;display:block;opacity:0.4}
+.empty-text{font-size:13px;letter-spacing:1px}
+
+/* ── Footer ──────────────────────────────────────────────────────────────── */
+footer{
+  margin-top:40px;
+  padding-top:24px;
+  border-top:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  flex-wrap:wrap;gap:12px;
+}
+.footer-text{font-size:10px;letter-spacing:2px;color:var(--text-dim)}
+.footer-legend{display:flex;gap:16px;flex-wrap:wrap}
+.legend-item{
+  display:flex;align-items:center;gap:6px;
+  font-size:10px;color:var(--text-dim);
+}
+.legend-dot{width:8px;height:8px;border-radius:50%}
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--surface)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:#2d4a68}
+
+/* ── Sample buttons ──────────────────────────────────────────────────────── */
+.samples-row{
+  display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;
+}
+.sample-btn{
+  padding:5px 12px;
+  font-size:10px;letter-spacing:1px;
+  border:1px dashed var(--border2);
+  border-radius:4px;
+  cursor:pointer;
+  background:transparent;
+  color:var(--text-dim);
+  font-family:var(--font-mono);
+  transition:all 0.15s;
+}
+.sample-btn:hover{border-color:var(--text-dim);color:var(--text-bright)}
+.samples-label{font-size:10px;letter-spacing:2px;color:var(--text-dim);align-self:center;text-transform:uppercase}
+
+/* ── Counter animation ───────────────────────────────────────────────────── */
+@keyframes countUp{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.stat-value{animation:countUp 0.4s ease forwards}
+</style>
+</head>
+<body>
+<div class="scanlines"></div>
+
+<div class="wrapper">
+  <!-- ── Header ── -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon"><i class="fa-solid fa-code"></i> </div>
+      <div>
+        <div class="logo-text">CODESCAN</div>
+        <!-- <div class="logo-sub">Lexical Analysis &amp; Syntax Validator</div> -->
+      </div>
+    </div>
+    <div class="header-badge">
+      <div class="badge-dot"></div>
+      
+    </div>
+    
+  </header>
+
+  <!-- ── Main Grid ── -->
+  <div class="main-grid">
+
+    <!-- ── Input Panel ── -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-dots">
+          <div class="dot dot-r"></div>
+          <div class="dot dot-r"></div>
+          <div class="dot dot-r"></div>
+        </div>
+        <span class="panel-title">Source Code Input</span>
+      </div>
+      <div class="panel-body">
+
+        <!-- Language Selector -->
+        <div class="lang-section">
+          <div class="lang-label">Select Language</div>
+          <div class="lang-buttons">
+            <!-- <button class="lang-btn c-btn" data-lang="C">C</button> -->
+            <button class="lang-btn java-btn" data-lang="JAVA">JAVA</button>
+            <button class="lang-btn py-btn" data-lang="PYTHON">PYTHON</button>
+            <button class="lang-btn js-btn active" data-lang="JS">JS</button>
+          </div>
+        </div>
+
+        <!-- Load Samples -->
+        <div>
+          <div class="samples-row">
+            <span class="samples-label">Try sample:</span>
+            <button class="sample-btn" data-sample="valid">✓ Valid Code</button>
+            <button class="sample-btn" data-sample="error">✗ With Error</button>
+            <button class="sample-btn" data-sample="mismatch">⚠ Mismatch</button>
+          </div>
+        </div>
+
+        <!-- Code Editor -->
+        <div class="editor-wrap" style="margin-top:16px">
+          <div class="editor-header">
+            <span class="editor-lang-tag" id="editorLangTag">JavaScript</span>
+            <span style="font-size:10px;color:var(--text-dim)"></span>
+          </div>
+          <div style="position:relative">
+            <div class="editor-lines" id="lineNumbers">
+              <span class="line-num">1</span>
+            </div>
+            <textarea id="codeInput" spellcheck="false"
+              placeholder="// Paste or type your code here...
+// Select a language and click SCAN
+
+function greet(name) {
+  return 'Hello, ' + name;
+}"></textarea>
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="scan-row">
+          <span class="char-count" id="charCount">0 chars · 1 line</span>
+          <button id="scanBtn">
+            <span class="btn-spinner"></span>
+            <span class="btn-text">⟶ SCAN CODE</span>
+          </button>
+        </div>
+
+        <!-- Output Banner -->
+        <div id="outputBanner">
+          <div class="banner-inner">
+            <span class="banner-icon" id="bannerIcon"></span>
+            <div class="banner-messages" id="bannerMessages"></div>
+          </div>
+        </div>
+
+        <!-- Stats -->
+        <div id="statsBar" style="margin-top:12px">
+          <div class="stats-grid" id="statsGrid"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── Results Panel ── -->
+    <div class="panel results-panel" id="tokensSection">
+      <div class="panel-header">
+        <div class="panel-dots">
+          <div class="dot dot-g"></div>
+          <div class="dot dot-g"></div>
+          <div class="dot dot-g"></div>
+        </div>
+        <span class="panel-title">Token Analysis Results</span>
+        <span id="tableLanguageBadge" class="lang-badge" style="margin-left:10px"></span>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
+          <span id="tokenCount" style="font-size:10px;color:var(--text-dim);letter-spacing:1px"></span>
+          <button id="exportBtn" style="padding:4px 12px;font-size:10px;letter-spacing:1px;border:1px solid var(--border2);border-radius:4px;background:transparent;color:var(--text-dim);cursor:pointer;font-family:var(--font-mono)">↓ EXPORT</button>
+        </div>
+      </div>
+      <div class="panel-body">
+
+        <!-- Filter Pills -->
+        <div class="table-controls">
+          <span class="filter-label">Filter:</span>
+          <div class="filter-pills" id="filterPills">
+            <button class="filter-pill active" data-type="ALL">ALL</button>
+            <button class="filter-pill" data-type="KEYWORD">KEYWORD</button>
+            <button class="filter-pill" data-type="IDENTIFIER">IDENTIFIER</button>
+            <button class="filter-pill" data-type="NUMBER">NUMBER</button>
+            <button class="filter-pill" data-type="FLOAT">FLOAT</button>
+            <button class="filter-pill" data-type="STRING">STRING</button>
+            <button class="filter-pill" data-type="OPERATOR">OPERATOR</button>
+            <button class="filter-pill" data-type="SYMBOL">SYMBOL</button>
+          </div>
+        </div>
+
+        <!-- Table -->
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Token Type</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody id="tokenTableBody">
+              <tr><td colspan="3">
+                <div class="empty-state">
+                  <span class="empty-icon">⟨ ⟩</span>
+                  <div class="empty-text">No tokens yet. Write code and click SCAN.</div>
+                </div>
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main-grid -->
+
+  <!-- ── Footer ── -->
+  <footer>
+    <span class="footer-text">CODESCAN · Multi-Language Scanner
+    </span>
+    <div class="footer-legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--c-color)"></div>C</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--java-color)"></div>Java</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--py-color)"></div>Python</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--js-color)"></div>JavaScript</div>
+    </div>
+  </footer>
+</div>
+
+<script>
+'use strict';
+/* ════════════════════════════════════════════════════════════════════════════
+   LEXERS
+═══════════════════════════════════════════════════════════════════════════ */
+const C_KEYWORDS = new Set(['auto','break','case','char','const','continue','default','do','double','else','enum','extern','float','for','goto','if','inline','int','long','register','restrict','return','short','signed','sizeof','static','struct','switch','typedef','union','unsigned','void','volatile','while','include','define','printf','scanf','main','NULL','true','false']);
+const JAVA_KEYWORDS = new Set(['abstract','assert','boolean','break','byte','case','catch','char','class','const','continue','default','do','double','else','enum','extends','final','finally','float','for','goto','if','implements','import','instanceof','int','interface','long','native','new','package','private','protected','public','return','short','static','strictfp','super','switch','synchronized','this','throw','throws','transient','try','void','volatile','while','true','false','null','String','System','out','println','print','main','args']);
+const PYTHON_KEYWORDS = new Set(['False','None','True','and','as','assert','async','await','break','class','continue','def','del','elif','else','except','finally','for','from','global','if','import','in','is','lambda','nonlocal','not','or','pass','raise','return','try','while','with','yield','print','input','range','len','int','str','float','list','dict','set','tuple','self','cls']);
+const JS_KEYWORDS = new Set(['abstract','arguments','await','boolean','break','byte','case','catch','char','class','const','continue','debugger','default','delete','do','double','else','enum','eval','export','extends','false','final','finally','float','for','function','goto','if','implements','import','in','instanceof','int','interface','let','long','native','new','null','package','private','protected','public','return','short','static','super','switch','synchronized','this','throw','throws','transient','true','try','typeof','undefined','var','void','volatile','while','with','yield','console','log','Math','Array','Object','String','Number','Promise','async','of','from','require','module','exports']);
+
+function genericTokenize(code, keywords, opts = {}) {
+  const tokens = [];
+  // Remove comments
+  if (opts.cStyleComments !== false) {
+    code = code.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  }
+  if (opts.hashComments) {
+    code = code.split('\n').map(l => l.replace(/#[^\n]*/, '')).join('\n');
+  }
+
+  let i = 0;
+  while (i < code.length) {
+    if (/\s/.test(code[i])) { i++; continue; }
+
+    // Template literals (JS)
+    if (opts.templateLiterals && code[i] === '`') {
+      let s = '`'; i++;
+      while (i < code.length && code[i] !== '`') { s += code[i]; i++; }
+      s += '`'; i++;
+      tokens.push({ type: 'STRING', value: s }); continue;
+    }
+
+    // Strings
+    if (code[i] === '"' || code[i] === "'") {
+      const q = code[i]; let s = q; i++;
+      while (i < code.length && code[i] !== q) {
+        if (code[i] === '\\') { s += code[i]; i++; }
+        if (i < code.length) { s += code[i]; i++; }
+      }
+      s += q; i++;
+      tokens.push({ type: 'STRING', value: s }); continue;
+    }
+
+    // Three-char operators
+    if (opts.threeCharOps) {
+      const t3 = code.slice(i, i+3);
+      if (['===','!==','...','**='].includes(t3)) {
+        tokens.push({ type: 'OPERATOR', value: t3 }); i += 3; continue;
+      }
+    }
+
+    // Two-char operators
+    const t2 = code.slice(i, i+2);
+    const twoOps = opts.twoCharOps || ['++','--','+=','-=','*=','/=','%=','==','!=','>=','<=','&&','||','->'];
+    if (twoOps.includes(t2)) {
+      tokens.push({ type: 'OPERATOR', value: t2 }); i += 2; continue;
+    }
+
+    // Python-specific two-char
+    if (opts.pythonOps) {
+      if (['**','//','**',':='].includes(t2)) {
+        tokens.push({ type: 'OPERATOR', value: t2 }); i += 2; continue;
+      }
+    }
+
+    // Arrow function
+    if (opts.arrowOp && t2 === '=>') {
+      tokens.push({ type: 'OPERATOR', value: '=>' }); i += 2; continue;
+    }
+
+    // Single-char operators
+    const opChars = opts.opChars || '+-*/%=><&|!';
+    if (opChars.includes(code[i])) {
+      tokens.push({ type: 'OPERATOR', value: code[i] }); i++; continue;
+    }
+
+    // Symbols
+    const symChars = opts.symChars || ';,(){}[]:';
+    if (symChars.includes(code[i])) {
+      tokens.push({ type: 'SYMBOL', value: code[i] }); i++; continue;
+    }
+
+    // Numbers
+    if (/\d/.test(code[i])) {
+      let num = ''; let isFloat = false;
+      while (i < code.length && (/\d/.test(code[i]) || (code[i] === '.' && !isFloat))) {
+        if (code[i] === '.') isFloat = true;
+        num += code[i]; i++;
+      }
+      if (opts.numSuffix && /[lLfFdD]/.test(code[i] || '')) { num += code[i]; i++; }
+      tokens.push({ type: isFloat ? 'FLOAT' : 'NUMBER', value: num }); continue;
+    }
+
+    // Identifiers / Keywords
+    const idStart = opts.idStart || /[a-zA-Z_#]/;
+    const idCont  = opts.idCont  || /[a-zA-Z0-9_]/;
+    if (idStart.test(code[i])) {
+      let word = '';
+      while (i < code.length && idCont.test(code[i])) { word += code[i]; i++; }
+      tokens.push({ type: keywords.has(word) ? 'KEYWORD' : 'IDENTIFIER', value: word }); continue;
+    }
+
+    i++;
+  }
+  return tokens;
+}
+
+const LEXERS = {
+  C:      code => genericTokenize(code, C_KEYWORDS, { cStyleComments: true, twoCharOps: ['++','--','+=','-=','*=','/=','%=','==','!=','>=','<=','&&','||','->'] }),
+  JAVA:   code => genericTokenize(code, JAVA_KEYWORDS, { cStyleComments: true, numSuffix: true, twoCharOps: ['++','--','+=','-=','*=','/=','%=','==','!=','>=','<=','&&','||'] }),
+  PYTHON: code => genericTokenize(code, PYTHON_KEYWORDS, { cStyleComments: false, hashComments: true, pythonOps: true, twoCharOps: ['++','--','+=','-=','*=','/=','%=','==','!=','>=','<=','&&','||',':=','**','//'], opChars: '+-*/%=><&|!~@' }),
+  JS:     code => genericTokenize(code, JS_KEYWORDS, { cStyleComments: true, templateLiterals: true, threeCharOps: true, arrowOp: true, twoCharOps: ['++','--','+=','-=','*=','/=','%=','==','!=','>=','<=','&&','||','??','=>','**'], opChars: '+-*/%=><&|!~^', idStart: /[a-zA-Z_$]/, idCont: /[a-zA-Z0-9_$]/ }),
+};
+
+/* ════════════════════════════════════════════════════════════════════════════
+   VALIDATORS
+═══════════════════════════════════════════════════════════════════════════ */
+function cleanCode(code, lang) {
+  let c = code;
+  if (lang !== 'PYTHON') {
+    c = c.replace(/\/\/[^\n]*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
+  } else {
+    c = c.split('\n').map(l => l.replace(/#[^\n]*/,'')).join('\n');
+  }
+  return c.replace(/"[^"]*"|'[^']*'|`[^`]*`/g,'""');
+}
+
+function checkBraces(clean) {
+  const errs = [];
+  let b = 0, p = 0, sq = 0;
+  for (const ch of clean) {
+    if (ch==='{') b++; if (ch==='}') b--;
+    if (ch==='(') p++; if (ch===')') p--;
+    if (ch==='[') sq++; if (ch===']') sq--;
+  }
+  if (b > 0) errs.push('Syntax Error: Unmatched opening brace `{`');
+  if (b < 0) errs.push('Syntax Error: Unmatched closing brace `}`');
+  if (p !== 0) errs.push('Syntax Error: Unmatched parentheses');
+  if (sq !== 0) errs.push('Syntax Error: Unmatched square brackets `[]`');
+  return errs;
+}
+
+const VALIDATORS = {
+  C(code) {
+    // Mismatch
+    if (/^\s*def\s+\w+\s*\(/m.test(code) || /\belif\b/.test(code)) return { mismatch: true, error: 'Error: Code does not match selected language (detected Python)' };
+    if (/\b(public|private|protected)\s+(class|static|void)\b/.test(code) || /System\.out/.test(code)) return { mismatch: true, error: 'Error: Code does not match selected language (detected Java)' };
+    if (/\b(let|const)\s+\w+\s*=/.test(code) || /console\.log/.test(code) || /=>/.test(code)) return { mismatch: true, error: 'Error: Code does not match selected language (detected JavaScript)' };
+
+    const clean = cleanCode(code, 'C');
+    const errs = checkBraces(clean);
+
+    // Semicolons
+    const lines = clean.split('\n').map(l=>l.trim()).filter(Boolean);
+    for (const line of lines) {
+      if (line.startsWith('#') || /^[{}]$/.test(line) || line.endsWith('{') || line.endsWith('}') || line.endsWith(':')) continue;
+      if (/^(if|for|while|else|switch|do)\b/.test(line)) continue;
+      if (/^\/\//.test(line)) continue;
+      if (line.length > 0 && !/[;{}]$/.test(line)) {
+        errs.push(`Syntax Error: Missing semicolon near: "${line.substring(0,35)}"`);
+        break;
+      }
+    }
+    return { errors: errs };
+  },
+
+  JAVA(code) {
+    if (/^\s*def\s+\w+\s*\(/m.test(code) || /\belif\b/.test(code)) return { mismatch: true, error: 'Error: Code does not match selected language (detected Python)' };
+    if (/#include|#define|\bprintf\s*\(|\bscanf\s*\(/.test(code)) return { mismatch: true, error: 'Error: Code does not match selected language (detected C)' };
+    if (/\b(let|const)\s+\w+\s*=/.test(code) || /console\.log/.test(code) || /(?<!=)=>/.test(code)) return { mismatch: true, error: 'Error: Code does not match selected language (detected JavaScript)' };
+
+    const clean = cleanCode(code, 'JAVA');
+    const errs = checkBraces(clean);
+
+    const lines = clean.split('\n').map(l=>l.trim()).filter(Boolean);
+    for (const line of lines) {
+      if (/^[@{}]/.test(line) || line === '{' || line === '}' || line.endsWith('{') || line.endsWith('}')) continue;
+      if (/^(if|for|while|else|switch|do|try|catch|finally|class|interface|enum)\b/.test(line)) continue;
+      if (/^(public|private|protected|static|abstract|final)\b/.test(line)) {
+        if (/\)$|\)\s*\{$/.test(line) || line.endsWith('{')) continue;
+      }
+      if (line.length > 0 && !/[;{}]$/.test(line)) {
+        errs.push(`Syntax Error: Missing semicolon near: "${line.substring(0,35)}"`);
+        break;
+      }
+    }
+    return { errors: errs };
+  },
+
+  PYTHON(code) {
+    if (/#include|#define|\bprintf\s*\(/.test(code)) return { mismatch: true, error: 'Error: Code does not match selected language (detected C)' };
+    if (/\b(public|private|protected)\s+(class|static)\b/.test(code) || /System\.out/.test(code)) return { mismatch: true, error: 'Error: Code does not match selected language (detected Java)' };
+    if (/\b(let|const|var)\s+\w+\s*=/.test(code) && !/\bdef\b/.test(code)) {
+      if (/console\.log|typeof |=>/.test(code)) return { mismatch: true, error: 'Error: Code does not match selected language (detected JavaScript)' };
+    }
+
+    const errs = [];
+    const lines = code.split('\n').map(l => l.replace(/#[^\n]*/,'').trimEnd());
+
+    // No semicolons as statement terminators
+    for (const l of lines) {
+      const stripped = l.replace(/["'][^"']*["']/g,'').trim();
+      if (stripped.endsWith(';') && stripped.length > 1) {
+        errs.push(`Syntax Error: Python does not use semicolons (found: "${l.trim().substring(0,30)}")`);
+        break;
+      }
+    }
+
+    // Block statements need colon
+    const blockRe = /^\s*(def|class|if|elif|else|for|while|try|except|finally|with)\b/;
+    for (let i = 0; i < lines.length; i++) {
+      const l = lines[i];
+      if (!l.trim()) continue;
+      if (blockRe.test(l)) {
+        const s = l.trimEnd();
+        if (!s.endsWith(':') && !s.endsWith('\\') && !s.endsWith('(') && !s.endsWith(',')) {
+          const next = lines[i+1] || '';
+          if (!next.startsWith('  ') && !next.startsWith('\t')) {
+            errs.push(`Syntax Error: Missing ':' after "${l.trim().substring(0,30)}"`);
+            break;
+          }
+        }
+      }
+    }
+
+    // Paren/bracket balance
+    const clean = cleanCode(code, 'PYTHON');
+    errs.push(...checkBraces(clean).filter(e => e.includes('paren') || e.includes('bracket')));
+
+    // Mixed indentation
+    const tabLines   = lines.filter(l => l.startsWith('\t'));
+    const spaceLines = lines.filter(l => l.startsWith('  ') && !l.startsWith('\t'));
+    if (tabLines.length > 0 && spaceLines.length > 0)
+      errs.push('Syntax Error: Mixed tabs and spaces in indentation');
+
+    return { errors: [...new Set(errs)] };
+  },
+
+  JS(code) {
+    if (/^\s*def\s+\w+\s*\(/m.test(code) || /\belif\b/.test(code)) return { mismatch: true, error: 'Error: Code does not match selected language (detected Python)' };
+    if (/#include|#define|\bprintf\s*\(|\bscanf\s*\(/.test(code)) return { mismatch: true, error: 'Error: Code does not match selected language (detected C)' };
+    if (/\b(public|private|protected)\s+(class|static|void)\b/.test(code) || /System\.out/.test(code)) return { mismatch: true, error: 'Error: Code does not match selected language (detected Java)' };
+
+    const clean = cleanCode(code, 'JS');
+    const errs = checkBraces(clean);
+
+    // const without init
+    for (const line of clean.split('\n')) {
+      if (/^\s*const\s+\w+\s*;/.test(line.trim())) {
+        errs.push('Syntax Error: `const` declaration must be initialized');
+        break;
+      }
+    }
+    return { errors: errs };
+  }
+};
+
+/* ════════════════════════════════════════════════════════════════════════════
+   SCAN ORCHESTRATOR
+═══════════════════════════════════════════════════════════════════════════ */
+function scan(code, language) {
+  const lang = language.toUpperCase();
+  if (!LEXERS[lang]) return { error: `Unsupported language: ${language}` };
+
+  const vResult = VALIDATORS[lang](code);
+  if (vResult.mismatch) return { error: vResult.error };
+  if (vResult.errors && vResult.errors.length > 0) {
+    return { error: vResult.errors[0], allErrors: vResult.errors };
+  }
+
+  const tokens = LEXERS[lang](code);
+  if (!tokens.length) return { error: 'No tokens found. Please enter valid code.' };
+
+  return { tokens: tokens.map(t => ({ ...t, language: lang })) };
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   SAMPLES
+═══════════════════════════════════════════════════════════════════════════ */
+const SAMPLES = {
+  C: {
+    valid: `#include <stdio.h>
+
+int add(int a, int b) {
+    return a + b;
+}
+
+int main() {
+    int x = 10;
+    int y = 20;
+    float ratio = 3.14;
+    printf("Sum = %d\\n", add(x, y));
+    return 0;
+}`,
+    error: `#include <stdio.h>
+
+int main() {
+    int x = 10
+    int y = 20;
+    printf("x = %d\\n", x)
+    return 0;
+}`,
+    mismatch: `def greet(name):
+    print(f"Hello, {name}")
+
+greet("World")`
+  },
+  JAVA: {
+    valid: `public class HelloWorld {
+    public static void main(String[] args) {
+        int x = 42;
+        String msg = "Hello";
+        double pi = 3.14159;
+        System.out.println(msg + " " + x);
+    }
+}`,
+    error: `public class Demo {
+    public static void main(String[] args) {
+        int x = 10
+        String name = "Java"
+        System.out.println(name)
+    }
+}`,
+    mismatch: `x = 10
+y = 20
+print(x + y)`
+  },
+  PYTHON: {
+    valid: `def factorial(n):
+    if n == 0:
+        return 1
+    else:
+        return n * factorial(n - 1)
+
+result = factorial(5)
+count = 3.14
+print(f"Result: {result}")`,
+    error: `def greet(name)
+    print("Hello " + name)
+
+x = 10;
+greet("World")`,
+    mismatch: `#include <stdio.h>
+int main() {
+    printf("Hello World");
+    return 0;
+}`
+  },
+  JS: {
+    valid: `const greet = (name) => {
+    let message = "Hello, " + name;
+    const pi = 3.14159;
+    let count = 42;
+    return message;
+};
+
+function add(a, b) {
+    return a + b;
+}
+
+console.log(greet("World"));`,
+    error: `const x = 10
+let y = 20;
+const total = x + y
+
+function show() {
+    console.log(total
+}`,
+    mismatch: `public class Main {
+    public static void main(String[] args) {
+        System.out.println("Hello");
+    }
+}`
+  }
+};
+
+/* ════════════════════════════════════════════════════════════════════════════
+   RULES & UI DATA
+═══════════════════════════════════════════════════════════════════════════ */
+const LANG_NAMES = { C: 'C', JAVA: 'Java', PYTHON: 'Python', JS: 'JavaScript' };
+const LANG_RULES = {
+  C: [
+    '✦ Statements end with semicolon <code>;</code>',
+    '✦ Blocks enclosed in braces <code>{ }</code>',
+    '✦ Functions require return type declaration',
+    '✦ Comments: <code>// single</code> or <code>/* multi */</code>',
+    '✦ <code>#include</code> for library imports',
+    '✦ No Python/Java/JS syntax allowed',
+  ],
+  JAVA: [
+    '✦ Statements end with semicolon <code>;</code>',
+    '✦ Code must reside in a <code>class</code>',
+    '✦ Access modifiers: <code>public</code>, <code>private</code>, <code>protected</code>',
+    '✦ Entry point: <code>public static void main</code>',
+    '✦ Comments: <code>// single</code> or <code>/* multi */</code>',
+    '✦ No Python/C/JS syntax allowed',
+  ],
+  PYTHON: [
+    '✦ No semicolons as statement terminators',
+    '✦ Blocks use colon <code>:</code> then indentation',
+    '✦ Functions defined with <code>def</code>',
+    '✦ Comments start with <code>#</code>',
+    '✦ Consistent indentation (tabs OR spaces)',
+    '✦ No C/Java/JS syntax allowed',
+  ],
+  JS: [
+    '✦ Semicolons optional (ASI applies)',
+    '✦ Declare with <code>var</code>, <code>let</code>, <code>const</code>',
+    '✦ Arrow functions: <code>() => { }</code>',
+    '✦ <code>const</code> must be initialized',
+    '✦ Comments: <code>// single</code> or <code>/* multi */</code>',
+    '✦ No Python/C/Java syntax allowed',
+  ]
+};
+const OP_LIST = ['++','--','+=','-=','*=','/=','%=','==','!=','>=','<=','&&','||','!','+','-','*','/','%','=','>','<','**','=>','===','!=='];
+
+/* ════════════════════════════════════════════════════════════════════════════
+   UI STATE & DOM
+═══════════════════════════════════════════════════════════════════════════ */
+let selectedLang = 'JS';
+let allTokens = [];
+let activeFilter = 'ALL';
+
+const codeInput        = document.getElementById('codeInput');
+const scanBtn          = document.getElementById('scanBtn');
+const outputBanner     = document.getElementById('outputBanner');
+const bannerIcon       = document.getElementById('bannerIcon');
+const bannerMessages   = document.getElementById('bannerMessages');
+const tokenTableBody   = document.getElementById('tokenTableBody');
+const tokensSection    = document.getElementById('tokensSection');
+const tokenCount       = document.getElementById('tokenCount');
+const statsBar         = document.getElementById('statsBar');
+const statsGrid        = document.getElementById('statsGrid');
+const charCount        = document.getElementById('charCount');
+const editorLangTag    = document.getElementById('editorLangTag');
+const lineNumbers      = document.getElementById('lineNumbers');
+const filterPills      = document.getElementById('filterPills');
+const exportBtn        = document.getElementById('exportBtn');
+
+/* ── Language Buttons ────────────────────────────────────────────────────── */
+document.querySelectorAll('.lang-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    selectedLang = btn.dataset.lang;
+    editorLangTag.textContent = LANG_NAMES[selectedLang];
+    updateRules();
+    hideBanner();
+    // Load matching sample if editor is empty or has a sample
+    const current = codeInput.value;
+    if (!current.trim()) loadSample('valid');
+  });
+});
+
+/* ── Sample Buttons ──────────────────────────────────────────────────────── */
+document.querySelectorAll('.sample-btn').forEach(btn => {
+  btn.addEventListener('click', () => loadSample(btn.dataset.sample));
+});
+
+function loadSample(type) {
+  const s = SAMPLES[selectedLang];
+  if (s && s[type]) {
+    codeInput.value = s[type];
+    updateLineNumbers();
+    updateCharCount();
+    hideBanner();
+  }
+}
+
+/* ── Line numbers ────────────────────────────────────────────────────────── */
+function updateLineNumbers() {
+  const lines = codeInput.value.split('\n');
+  lineNumbers.innerHTML = lines.map((_,i) =>
+    `<span class="line-num">${i+1}</span>`
+  ).join('');
+}
+
+function updateCharCount() {
+  const v = codeInput.value;
+  const lines = v.split('\n').length;
+  charCount.textContent = `${v.length} chars · ${lines} line${lines!==1?'s':''}`;
+}
+
+codeInput.addEventListener('input', () => {
+  updateLineNumbers();
+  updateCharCount();
+});
+codeInput.addEventListener('scroll', () => {
+  lineNumbers.style.top = `-${codeInput.scrollTop}px`;
+});
+codeInput.addEventListener('keydown', e => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const start = codeInput.selectionStart;
+    const end = codeInput.selectionEnd;
+    codeInput.value = codeInput.value.substring(0, start) + '  ' + codeInput.value.substring(end);
+    codeInput.selectionStart = codeInput.selectionEnd = start + 2;
+    updateLineNumbers();
+    updateCharCount();
+  }
+});
+
+/* ── Rules Panel ─────────────────────────────────────────────────────────── */
+function updateRules() { /* panel removed — no-op */ }
+function buildOpList() { /* panel removed — no-op */ }
+
+/* ── Filter Pills ────────────────────────────────────────────────────────── */
+filterPills.querySelectorAll('.filter-pill').forEach(pill => {
+  pill.addEventListener('click', () => {
+    filterPills.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+    pill.classList.add('active');
+    activeFilter = pill.dataset.type;
+    renderTable();
+  });
+});
+
+/* ── Scan ────────────────────────────────────────────────────────────────── */
+scanBtn.addEventListener('click', async () => {
+  const code = codeInput.value.trim();
+  if (!code) { showError('No code provided. Please write some code first.'); return; }
+
+  scanBtn.disabled = true;
+  scanBtn.classList.add('loading');
+  hideBanner();
+
+  // Simulate slight async delay for UX
+  await new Promise(r => setTimeout(r, 180));
+
+  try {
+    const result = scan(code, selectedLang);
+    if (result.error) {
+      showError(result.error, result.allErrors);
+      allTokens = [];
+      tokensSection.style.display = 'none';
+    } else {
+      allTokens = result.tokens;
+      showSuccess(`Successfully scanned ${allTokens.length} token${allTokens.length!==1?'s':''}.`);
+      renderTable();
+      renderStats();
+      tokensSection.style.display = 'block';
+      tokensSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  } catch (err) {
+    showError('Internal error: ' + err.message);
+  }
+
+  scanBtn.disabled = false;
+  scanBtn.classList.remove('loading');
+});
+
+/* ── Banner ──────────────────────────────────────────────────────────────── */
+function showError(msg, allErrors) {
+  outputBanner.className = 'error';
+  bannerIcon.textContent = '❌';
+  const msgs = allErrors && allErrors.length > 1 ? allErrors : [msg];
+  bannerMessages.innerHTML = msgs.map(m =>
+    `<div class="banner-msg">${m}</div>`
+  ).join('');
+  outputBanner.style.display = 'block';
+  statsBar.style.display = 'none';
+}
+
+function showSuccess(msg) {
+  outputBanner.className = 'success';
+  bannerIcon.textContent = '✅';
+  bannerMessages.innerHTML = `<div class="banner-msg">${msg}</div>`;
+  outputBanner.style.display = 'block';
+}
+
+function hideBanner() {
+  outputBanner.style.display = 'none';
+}
+
+/* ── Stats ───────────────────────────────────────────────────────────────── */
+function renderStats() {
+  if (!allTokens.length) { statsBar.style.display = 'none'; return; }
+
+  const counts = {};
+  allTokens.forEach(t => { counts[t.type] = (counts[t.type]||0) + 1; });
+
+  const COLORS = { KEYWORD: 'var(--kw)', IDENTIFIER: 'var(--id)', NUMBER: 'var(--num)', FLOAT: 'var(--float)', STRING: 'var(--str)', OPERATOR: 'var(--op)', SYMBOL: 'var(--sym)' };
+
+  statsGrid.innerHTML = [
+    `<div class="stat-item"><div class="stat-label">Total</div><div class="stat-value" style="color:var(--scan-color)">${allTokens.length}</div></div>`,
+    ...Object.entries(counts).map(([type, count]) =>
+      `<div class="stat-item"><div class="stat-label">${type}</div><div class="stat-value" style="color:${COLORS[type]||'var(--text-bright)'}">${count}</div></div>`
+    )
+  ].join('');
+
+  statsBar.style.display = 'block';
+}
+
+/* ── Table ────────────────────────────────────────────────────────────────── */
+function renderTable() {
+  const filtered = activeFilter === 'ALL' ? allTokens : allTokens.filter(t => t.type === activeFilter);
+  tokenCount.textContent = `${filtered.length} / ${allTokens.length} tokens`;
+
+  // Update language badge in panel header
+  const badge = document.getElementById('tableLanguageBadge');
+  if (badge && allTokens.length) {
+    badge.className = `lang-badge ${allTokens[0].language}`;
+    badge.textContent = allTokens[0].language;
+  }
+
+  if (!filtered.length) {
+    tokenTableBody.innerHTML = `<tr><td colspan="3"><div class="empty-state"><span class="empty-icon">⟨ ⟩</span><div class="empty-text">No tokens match the selected filter.</div></div></td></tr>`;
+    return;
+  }
+
+  tokenTableBody.innerHTML = filtered.map((t, i) => `
+    <tr style="animation-delay:${Math.min(i * 0.012, 0.6)}s">
+      <td>${i + 1}</td>
+      <td>
+        <span class="type-badge ${t.type}">
+          <span class="type-dot" style="background:${typeColor(t.type)}"></span>
+          ${t.type}
+        </span>
+      </td>
+      <td><span class="token-value">${escHtml(t.value)}</span></td>
+    </tr>
+  `).join('');
+}
+
+function typeColor(t) {
+  const m = { KEYWORD:'var(--kw)', IDENTIFIER:'var(--id)', NUMBER:'var(--num)', FLOAT:'var(--float)', STRING:'var(--str)', OPERATOR:'var(--op)', SYMBOL:'var(--sym)' };
+  return m[t] || 'var(--text-dim)';
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ── Export ──────────────────────────────────────────────────────────────── */
+exportBtn.addEventListener('click', () => {
+  if (!allTokens.length) return;
+  const filtered = activeFilter === 'ALL' ? allTokens : allTokens.filter(t => t.type === activeFilter);
+  const csv = ['Language,Token Type,Value', ...filtered.map(t => `${t.language},${t.type},"${t.value.replace(/"/g,'""')}"`)]
+    .join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `tokens_${selectedLang.toLowerCase()}_${Date.now()}.csv`;
+  a.click();
+});
+
+/* ── Init ────────────────────────────────────────────────────────────────── */
+updateRules();
+buildOpList();
+updateLineNumbers();
+updateCharCount();
+loadSample('valid');
+</script>
+</body>
+</html>
